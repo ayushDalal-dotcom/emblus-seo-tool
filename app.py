@@ -16,9 +16,12 @@ import pandas as pd
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 
-load_dotenv(override=True)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except Exception:
+    pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
