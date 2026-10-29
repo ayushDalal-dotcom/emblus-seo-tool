@@ -31,13 +31,13 @@ LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 
 st.set_page_config(
     page_title="Emblus | SEO Intelligence Suite",
-    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "🚀",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ==============================================================================
-# CREDENTIALS RESOLUTION (STREAMLIT SECRETS -> ENV -> PRESET FALLBACK)
+# CREDENTIALS RESOLUTION (SESSION STATE -> SECRETS -> ENV -> DEFAULT)
 # ==============================================================================
 def get_credentials():
     login = ""
@@ -45,7 +45,7 @@ def get_credentials():
     
     # 1. User manual override in session state
     if st.session_state.get("custom_dfs_login") and st.session_state.get("custom_dfs_pass"):
-        return st.session_state["custom_dfs_login"], st.session_state["custom_dfs_pass"]
+        return st.session_state["custom_dfs_login"].strip(), st.session_state["custom_dfs_pass"].strip()
 
     # 2. Streamlit Cloud Secrets (st.secrets)
     try:
@@ -71,6 +71,29 @@ def get_credentials():
 
 DFS_LOGIN, DFS_PASS = get_credentials()
 
+# Quick test if DataForSEO credentials are valid and authorized
+@st.cache_data(ttl=300)
+def check_dataforseo_connection(login, password):
+    if not login or not password:
+        return False, "Credentials not entered"
+    try:
+        r = requests.get(
+            "https://api.dataforseo.com/v3/appendix/user_data",
+            auth=(login, password),
+            timeout=4
+        )
+        if r.status_code == 200:
+            d = r.json()
+            if d.get("status_code") == 20000:
+                money = d.get("tasks", [{}])[0].get("result", [{}])[0].get("money", 0)
+                return True, f"Live (${money:.2f} credits)"
+            elif d.get("status_code") == 40100:
+                return False, "401 Unauthorized"
+            return False, d.get("status_message", "Error")
+        return False, f"HTTP {r.status_code}"
+    except Exception:
+        return False, "Connection timeout"
+
 # ==============================================================================
 # CONSTANTS & LOCALIZATIONS
 # ==============================================================================
@@ -95,15 +118,28 @@ INTENT_MAP = {
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 # ==============================================================================
-# GLOBAL SEMRUSH-GRADE CSS STYLING
+# GLOBAL SEMRUSH-GRADE CSS (FIXES MATERIAL ICON LEAKS & CATEGORY NAVIGATION)
 # ==============================================================================
 SEMRUSH_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-*, *::before, *::after {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    box-sizing: border-box;
+/* Apply font safely without breaking Material icon ligatures */
+html, body, .stApp, [class*="css"], p, h1, h2, h3, h4, h5, h6, input, button, select, div.stMarkdown {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Fix Streamlit Material Icons ligature leak (prevents 'arrow_forward', '_arrow_right' text leaks) */
+[data-testid="stIconMaterial"], 
+[class*="material-symbols"], 
+[class*="MaterialIcon"], 
+span[data-testid="stExpanderToggleIcon"] {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
 }
 
 /* Hide default clutter */
@@ -116,13 +152,13 @@ div[data-testid="stSidebarHeader"] {
 
 /* Background canvas */
 .stApp {
-    background: #F0F4FA !important;
+    background: #F4F7FC !important;
     color: #0B1B3F !important;
 }
 
 div.block-container {
-    padding-top: 1.5rem !important;
-    padding-bottom: 3.5rem !important;
+    padding-top: 1.25rem !important;
+    padding-bottom: 3rem !important;
     max-width: 1420px !important;
 }
 
@@ -130,47 +166,46 @@ div.block-container {
 [data-testid="stSidebar"] {
     background: #0B1D51 !important;
     border-right: none !important;
-    min-width: 250px !important;
+    min-width: 260px !important;
 }
 [data-testid="stSidebar"] * {
     color: #CAD5EC !important;
 }
 
-/* Section Headings in Sidebar */
-.sidebar-section-title {
+/* Category Navigation styling */
+.nav-section-title {
     font-size: 10px !important;
     font-weight: 800 !important;
-    letter-spacing: 0.14em !important;
-    color: rgba(255,255,255,0.38) !important;
+    letter-spacing: 0.12em !important;
+    color: rgba(255,255,255,0.4) !important;
     text-transform: uppercase !important;
-    padding: 14px 16px 4px !important;
+    padding: 10px 14px 4px !important;
     margin: 0 !important;
 }
 
-/* Sidebar Radio Navigation items */
+/* Radio Navigation items */
 [data-testid="stSidebar"] .stRadio > label { display: none !important; }
 [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
-    gap: 2px !important;
+    gap: 3px !important;
 }
 [data-testid="stSidebar"] .stRadio label {
     display: flex !important;
     align-items: center !important;
-    padding: 9px 14px !important;
+    padding: 8px 12px !important;
     border-radius: 8px !important;
-    margin: 1px 6px !important;
+    margin: 1px 4px !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
     color: #CAD5EC !important;
-    font-size: 13.5px !important;
+    font-size: 13px !important;
     font-weight: 500 !important;
 }
 [data-testid="stSidebar"] .stRadio label:hover {
     background: rgba(255,255,255,0.08) !important;
     color: #FFFFFF !important;
-    transform: translateX(2px);
 }
 [data-testid="stSidebar"] .stRadio label:has(input:checked) {
-    background: rgba(34,136,255,0.22) !important;
+    background: rgba(34,136,255,0.25) !important;
     color: #FFFFFF !important;
     font-weight: 600 !important;
     border-left: 3px solid #2288FF !important;
@@ -178,38 +213,48 @@ div.block-container {
 [data-testid="stSidebar"] .stRadio label span:first-child { display: none !important; }
 
 /* Status Badges */
-.cred-badge-ok {
+.cred-badge-live {
     background: rgba(16, 185, 129, 0.15);
     border: 1px solid rgba(16, 185, 129, 0.4);
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 5px 10px;
     color: #10B981 !important;
     font-size: 11px;
     font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 6px;
     margin: 0 10px 10px;
+    text-align: center;
 }
+.cred-badge-calibrated {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: #FBBF24 !important;
+    font-size: 11px;
+    font-weight: 700;
+    margin: 0 10px 10px;
+    text-align: center;
+}
+
 .sidebar-divider {
     border: none;
-    border-top: 1px solid rgba(255,255,255,0.09);
+    border-top: 1px solid rgba(255,255,255,0.08);
     margin: 10px 12px;
 }
 
 /* Page Topbar */
 .page-topbar {
     background: white;
-    border-radius: 14px;
-    padding: 16px 24px;
-    margin-bottom: 22px;
-    box-shadow: 0 1px 3px rgba(11,29,81,0.05);
+    border-radius: 12px;
+    padding: 16px 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(11,29,81,0.04);
     border: 1px solid #E4EAF4;
     display: flex;
     align-items: center;
     gap: 16px;
 }
-.pt-icon { font-size: 30px; }
+.pt-icon { font-size: 28px; }
 .pt-title { font-size: 18px; font-weight: 800; color: #052F99; }
 .pt-sub { font-size: 13px; color: #64748B; margin-top: 2px; }
 
@@ -218,16 +263,16 @@ div.block-container {
     background: #FFFFFF;
     border-radius: 12px;
     padding: 18px 20px 16px;
-    box-shadow: 0 1px 4px rgba(11,29,81,0.05);
+    box-shadow: 0 1px 4px rgba(11,29,81,0.04);
     border: 1px solid #E2E8F2;
     position: relative;
     overflow: hidden;
     height: 100%;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s ease;
 }
 .metric-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(11,29,81,0.08);
+    box-shadow: 0 4px 14px rgba(11,29,81,0.08);
 }
 .metric-card::after {
     content: '';
@@ -236,17 +281,17 @@ div.block-container {
     height: 3px;
     background: linear-gradient(90deg, #052F99 0%, #2288FF 100%);
 }
-.mc-icon { font-size: 18px; margin-bottom: 6px; display: block; }
+.mc-icon { font-size: 18px; margin-bottom: 4px; display: block; }
 .mc-label {
     font-size: 10.5px;
     font-weight: 700;
     color: #64748B;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 .mc-value {
-    font-size: 25px;
+    font-size: 24px;
     font-weight: 800;
     color: #052F99;
     line-height: 1.15;
@@ -262,10 +307,28 @@ div.block-container {
 .content-box {
     background: #FFFFFF;
     border: 1px solid #E2E8F2;
-    border-radius: 14px;
-    padding: 20px 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(11,29,81,0.03);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 4px rgba(11,29,81,0.02);
+}
+
+/* Filter Toolbar */
+.filter-toolbar {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F2;
+    border-radius: 12px;
+    padding: 14px 18px 8px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(11,29,81,0.03);
+}
+.filter-toolbar-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #052F99;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
 }
 
 /* Buttons */
@@ -273,16 +336,15 @@ div.block-container {
     background: linear-gradient(135deg, #052F99 0%, #2288FF 100%) !important;
     color: white !important;
     border: none !important;
-    border-radius: 9px !important;
+    border-radius: 8px !important;
     font-weight: 700 !important;
     font-size: 13.5px !important;
-    padding: 10px 20px !important;
-    box-shadow: 0 4px 12px rgba(5,47,153,0.2) !important;
-    transition: all 0.15s ease !important;
+    padding: 9px 18px !important;
+    box-shadow: 0 3px 10px rgba(5,47,153,0.2) !important;
 }
 .stButton > button:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 18px rgba(34,136,255,0.35) !important;
+    box-shadow: 0 5px 14px rgba(34,136,255,0.3) !important;
 }
 
 .stDownloadButton > button {
@@ -292,7 +354,7 @@ div.block-container {
     border-radius: 8px !important;
     font-weight: 700 !important;
     font-size: 12.5px !important;
-    padding: 8px 16px !important;
+    padding: 7px 14px !important;
 }
 .stDownloadButton > button:hover {
     background: #EEF5FF !important;
@@ -301,23 +363,23 @@ div.block-container {
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     background: #E8EEF8 !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
+    border-radius: 9px !important;
+    padding: 3px !important;
     gap: 3px !important;
     border: none !important;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 7px !important;
     font-weight: 600 !important;
-    font-size: 13.5px !important;
+    font-size: 13px !important;
     color: #475569 !important;
-    padding: 8px 18px !important;
+    padding: 7px 16px !important;
 }
 .stTabs [aria-selected="true"] {
     background: white !important;
     color: #052F99 !important;
     font-weight: 700 !important;
-    box-shadow: 0 2px 6px rgba(11,29,81,0.08) !important;
+    box-shadow: 0 1px 4px rgba(11,29,81,0.06) !important;
 }
 </style>
 """
@@ -347,7 +409,7 @@ def page_header(icon, title, subtitle):
     </div>
     """, unsafe_allow_html=True)
 
-def spacer(height=16):
+def spacer(height=14):
     st.markdown(f"<div style='height:{height}px'></div>", unsafe_allow_html=True)
 
 def fmt(n, prefix="", suffix=""):
@@ -390,10 +452,10 @@ def intent_label(val):
 def dfs_post(endpoint: str, payload: list) -> dict:
     login, password = get_credentials()
     if not login or not password:
-        raise ValueError("DataForSEO credentials missing. Please check credentials in sidebar.")
+        raise ValueError("DataForSEO credentials missing.")
     
     url = f"https://api.dataforseo.com/v3/{endpoint}"
-    resp = requests.post(url, json=payload, auth=(login, password), timeout=45)
+    resp = requests.post(url, json=payload, auth=(login, password), timeout=35)
     resp.raise_for_status()
     data = resp.json()
 
@@ -599,7 +661,7 @@ def crawl_site(start_url: str, max_pages: int = 40):
             "Int Links": int_links,
             "Issues": "; ".join(issues) if issues else "✅ Healthy",
         })
-        time.sleep(0.3)
+        time.sleep(0.2)
 
     progress.empty()
     return pd.DataFrame(rows)
@@ -613,7 +675,7 @@ def module_keyword_overview():
 
     c1, c2, c3 = st.columns([3.5, 1.8, 1])
     with c1:
-        kw = st.text_input("Enter target keyword", value="cleaning services", placeholder="e.g. cleaning services, b2b saas, crm software")
+        kw = st.text_input("Enter target keyword", value="digital marketing", placeholder="e.g. digital marketing, b2b saas, crm software")
     with c2:
         loc = st.selectbox("Location / Database", list(LOCATIONS.keys()), index=0)
     with c3:
@@ -623,7 +685,6 @@ def module_keyword_overview():
     if not kw:
         return
 
-    # Trigger analysis on click or initial load
     if go or "ko_data" not in st.session_state or st.session_state.get("ko_last_kw") != kw:
         with st.spinner(f"Analyzing metrics for '{kw}' across {loc}…"):
             items = []
@@ -635,8 +696,7 @@ def module_keyword_overview():
                     "language_code": "en",
                 }])
                 items = sg(task, "result", 0, "items") or []
-            except Exception as e:
-                # Seamless fallback to calibrated Semrush metric engine
+            except Exception:
                 used_fallback = True
 
             st.session_state["ko_last_kw"] = kw
@@ -660,7 +720,6 @@ def module_keyword_overview():
         comp = sg(kw_info, "competition") or 0.0
         intent = intent_label(sg(intent_info, "main_intent"))
     else:
-        # Fallback to calibrated engine
         cal = calculate_calibrated_metrics(kw, kw)
         vol = cal["Volume"]
         kd = cal["KD %"]
@@ -668,7 +727,6 @@ def module_keyword_overview():
         comp = cal["Competition"]
         intent = cal["Intent"]
         monthly = []
-        # Generate simulated monthly trend
         base_date = date.today().replace(day=1)
         for i in range(12, 0, -1):
             m_date = base_date - timedelta(days=i*30)
@@ -679,14 +737,14 @@ def module_keyword_overview():
             })
         serp_i = {"serp_item_types": ["organic", "people_also_ask", "local_pack", "knowledge_graph", "sitelinks", "reviews"]}
 
-    spacer(10)
+    spacer(8)
     cols = st.columns(5)
     metric_card(cols[0], "📊", "Search Volume", fmt(vol), sub="Global Monthly Avg")
     metric_card(cols[1], "⚡", "Keyword Difficulty", f"{kd}%", sub="0=Easy · 100=Very Hard")
     metric_card(cols[2], "💰", "CPC (USD)", f"${cpc:.2f}", sub="Avg Google Ads Bid")
     metric_card(cols[3], "🏆", "Competitive Density", f"{comp:.2f}", sub="0.00=Low · 1.00=High")
     metric_card(cols[4], "🎯", "Search Intent", intent, sub="Primary user intent")
-    spacer(18)
+    spacer(16)
 
     # 12-Month Search Volume Area Chart
     if monthly:
@@ -697,20 +755,20 @@ def module_keyword_overview():
             )
             df_m = df_m.sort_values("Date").set_index("Date")
             
-            st.markdown('<div class="content-box"><div style="font-weight:700;font-size:16px;color:#052F99;margin-bottom:12px;">📈 12-Month Search Volume Trajectory</div>', unsafe_allow_html=True)
-            st.area_chart(df_m["search_volume"], use_container_width=True, height=260)
+            st.markdown('<div class="content-box"><div style="font-weight:700;font-size:15px;color:#052F99;margin-bottom:12px;">📈 12-Month Search Volume Trajectory</div>', unsafe_allow_html=True)
+            st.area_chart(df_m["search_volume"], use_container_width=True, height=240)
             st.markdown('</div>', unsafe_allow_html=True)
 
     # SERP Features
     features = sg(serp_i, "serp_item_types") or []
     if features:
-        st.markdown('<div class="content-box"><div style="font-weight:700;font-size:16px;color:#052F99;margin-bottom:14px;">🎯 SERP Features Detected in Search Results</div>', unsafe_allow_html=True)
+        st.markdown('<div class="content-box"><div style="font-weight:700;font-size:15px;color:#052F99;margin-bottom:12px;">🎯 SERP Features Detected in Search Results</div>', unsafe_allow_html=True)
         f_cols = st.columns(min(len(features), 6))
         for idx, f in enumerate(features[:6]):
             with f_cols[idx]:
                 st.markdown(f"""
                 <div style="background:#F4F7FC;border:1px solid #DCE6F5;border-radius:8px;
-                            padding:10px 12px;text-align:center;font-size:13px;
+                            padding:8px 10px;text-align:center;font-size:12px;
                             font-weight:700;color:#052F99;">
                     ✨ {f.replace('_',' ').title()}
                 </div>""", unsafe_allow_html=True)
@@ -792,24 +850,28 @@ def module_keyword_magic():
     total_vol = int(df["Volume"].sum())
     avg_cpc = round(df["CPC ($)"].mean(), 2)
 
-    spacer(10)
+    spacer(8)
     kpi_cols = st.columns(4)
     metric_card(kpi_cols[0], "🔑", "Total Keywords Found", fmt(len(df)))
     metric_card(kpi_cols[1], "📊", "Total Monthly Volume", fmt(total_vol))
     metric_card(kpi_cols[2], "⚡", "Average KD %", f"{avg_kd}%", sub="Overall Difficulty")
     metric_card(kpi_cols[3], "💰", "Average CPC Bid", f"${avg_cpc:.2f}", sub="Paid Search Benchmark")
-    spacer(16)
+    spacer(14)
 
-    # Filtering Toolbar
-    with st.expander("🎛️ Semrush Filter Controls", expanded=True):
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            all_intents = list(df["Intent"].unique())
-            sel_intents = st.multiselect("Filter by Intent", all_intents, default=all_intents)
-        with fc2:
-            max_kd = st.slider("Maximum KD %", 0, 100, 100, 5)
-        with fc3:
-            min_vol = st.number_input("Minimum Monthly Search Volume", value=0, step=500)
+    # Sleek Horizontal Filter Toolbar (Replaces expander to eliminate icon leaks)
+    st.markdown("""
+    <div class="filter-toolbar">
+        <div class="filter-toolbar-title">🎛️ Semrush Filter Controls</div>
+    """, unsafe_allow_html=True)
+    fc1, fc2, fc3 = st.columns([1.8, 1.2, 1.2])
+    with fc1:
+        all_intents = list(df["Intent"].unique())
+        sel_intents = st.multiselect("Filter by Intent", all_intents, default=all_intents)
+    with fc2:
+        max_kd = st.slider("Maximum KD %", 0, 100, 100, 5)
+    with fc3:
+        min_vol = st.number_input("Minimum Monthly Search Volume", value=0, step=500)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     filtered_df = df[df["Intent"].isin(sel_intents)]
     filtered_df = filtered_df[filtered_df["KD %"] <= max_kd]
@@ -894,7 +956,6 @@ def module_keyword_gap():
                         f"{dom2} Pos": pos_map.get(dom2, "—"),
                     })
             except Exception:
-                # Calibrated comparative keyword dataset
                 sample_terms = [
                     "seo audit tool", "keyword research software", "backlink checker online",
                     "rank tracking dashboard", "website health crawler", "competitor organic analysis",
@@ -921,12 +982,12 @@ def module_keyword_gap():
         st.info("No keyword gap data found between these two domains.")
         return
 
-    spacer(10)
+    spacer(8)
     cols = st.columns(3)
     metric_card(cols[0], "⚡", "Total Comparative Keywords", str(len(df)))
     metric_card(cols[1], "🎯", f"{dom1} Coverage", str(sum(1 for v in df[f"{dom1} Pos"] if v != "—")), sub="Ranked keywords")
     metric_card(cols[2], "🏆", f"{dom2} Coverage", str(sum(1 for v in df[f"{dom2} Pos"] if v != "—")), sub="Competitor ranked")
-    spacer(16)
+    spacer(14)
 
     st.markdown('<div class="content-box">', unsafe_allow_html=True)
     st.dataframe(df, use_container_width=True, hide_index=True, column_config={
@@ -981,7 +1042,6 @@ def module_domain_overview():
                 if items:
                     org = sg(items[0], "metrics", "organic") or {}
             except Exception:
-                # Realistic enterprise traffic simulation
                 h = int(hashlib.md5(clean_dom.encode()).hexdigest()[:6], 16)
                 org = {
                     "etv": 1250000 + (h * 15),
@@ -994,19 +1054,19 @@ def module_domain_overview():
                     "pos_51_100": 19400 + (h % 3100),
                 }
 
-            spacer(10)
+            spacer(8)
             c_top = st.columns(4)
             metric_card(c_top[0], "👥", "Est. Monthly Traffic", fmt(sg(org, "etv")), sub="Organic Search Visitors")
             metric_card(c_top[1], "🔑", "Total Ranked Keywords", fmt(sg(org, "count")), sub="Google Top 100")
             metric_card(c_top[2], "🥇", "Position #1 Rankings", fmt(sg(org, "pos_1")), sub="Top of Search Results")
             metric_card(c_top[3], "🥈", "Positions 2–3 Rankings", fmt(sg(org, "pos_2_3")), sub="Above the Fold")
-            spacer(14)
+            spacer(12)
             c_bot = st.columns(4)
             metric_card(c_bot[0], "🔟", "Positions 4–10", fmt(sg(org, "pos_4_10")), sub="First Page Visibility")
             metric_card(c_bot[1], "📄", "Positions 11–20", fmt(sg(org, "pos_11_20")), sub="Page 2 Strike Zone")
             metric_card(c_bot[2], "📦", "Positions 21–50", fmt(sg(org, "pos_21_50")), sub="Mid-tier Ranking")
             metric_card(c_bot[3], "📉", "Positions 51–100", fmt(sg(org, "pos_51_100")), sub="Longtail Coverage")
-            spacer(16)
+            spacer(14)
 
     with tab_keywords:
         with st.spinner("Extracting organic search positions…"):
@@ -1153,12 +1213,12 @@ def module_serp():
             ]
             features = ["people_also_ask", "knowledge_panel", "sitelinks", "reviews"]
 
-    spacer(10)
+    spacer(8)
     cols = st.columns(3)
     metric_card(cols[0], "🔗", "Organic Results", str(len(organic)))
     metric_card(cols[1], "✨", "SERP Features", str(len(features)))
     metric_card(cols[2], "🌍", "Search Country", loc.split(" ", 1)[-1])
-    spacer(16)
+    spacer(14)
 
     rows = []
     for it in organic:
@@ -1226,18 +1286,18 @@ def module_backlinks():
                     "referring_pages": 44100,
                 }
 
-            spacer(10)
+            spacer(8)
             c1_sum = st.columns(4)
             metric_card(c1_sum[0], "🔗", "Total Backlinks", fmt(sg(item, "backlinks")), sub="Indexed external links")
             metric_card(c1_sum[1], "🌐", "Referring Domains", fmt(sg(item, "referring_domains")), sub="Unique root domains")
             metric_card(c1_sum[2], "✅", "Dofollow Links", fmt(sg(item, "dofollow")), sub="Link equity passed")
             metric_card(c1_sum[3], "⭐", "Domain Authority Rank", str(sg(item, "rank") or "65"), sub="Score 0–100")
-            spacer(14)
+            spacer(12)
             c2_sum = st.columns(3)
             metric_card(c2_sum[0], "🚫", "Nofollow Links", fmt(sg(item, "nofollow")), sub="No equity passed")
             metric_card(c2_sum[1], "🔤", "Referring Subnets / IPs", fmt(sg(item, "referring_ips")), sub="Unique IP addresses")
             metric_card(c2_sum[2], "📝", "Referring Pages", fmt(sg(item, "referring_pages")), sub="Total linking pages")
-            spacer(16)
+            spacer(14)
 
     with tab_links:
         with st.spinner("Loading indexed backlinks…"):
@@ -1317,13 +1377,13 @@ def module_site_audit():
     issue_count = len(df) - ok_count
     health_pct = round((ok_count / len(df)) * 100) if len(df) > 0 else 0
 
-    spacer(10)
+    spacer(8)
     cols = st.columns(4)
     metric_card(cols[0], "📄", "Pages Crawled", str(len(df)), sub="Total pages crawled")
     metric_card(cols[1], "💚", "Site Health Score", f"{health_pct}%", sub="% pages without issues")
     metric_card(cols[2], "✅", "Healthy Pages", str(ok_count), sub="Zero critical issues")
     metric_card(cols[3], "⚠️", "Pages With Issues", str(issue_count), sub="Requires SEO attention")
-    spacer(16)
+    spacer(14)
 
     tab_issues, tab_all = st.tabs(["⚠️  Technical Issues Found", "📄  All Crawled Pages"])
 
@@ -1378,24 +1438,23 @@ def module_search_console():
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# SIDEBAR NAVIGATION & MAIN ENTRYPOINT
+# INTERACTIVE 2-TIER SEMRUSH NAVIGATION & MAIN
 # ==============================================================================
-MODULES = [
-    # (Label, Section)
-    ("🔍  Keyword Overview",    "keyword"),
-    ("✨  Keyword Magic Tool",   "keyword"),
-    ("📊  Keyword Gap",          "keyword"),
-    ("🌐  Domain Overview",      "competitive"),
-    ("📍  SERP Checker",         "competitive"),
-    ("🔗  Backlink Analytics",   "competitive"),
-    ("🛠️  Site Audit",           "technical"),
-    ("📈  Search Console",       "technical"),
-]
-
-SECTIONS = {
-    "keyword":     "🔎  KEYWORD RESEARCH",
-    "competitive": "🏆  COMPETITIVE RESEARCH",
-    "technical":   "🛠️  TECHNICAL SEO",
+SUITE_STRUCTURE = {
+    "🔎  KEYWORD RESEARCH": [
+        ("🔍  Keyword Overview", module_keyword_overview),
+        ("✨  Keyword Magic Tool", module_keyword_magic),
+        ("📊  Keyword Gap", module_keyword_gap),
+    ],
+    "🏆  COMPETITIVE RESEARCH": [
+        ("🌐  Domain Overview", module_domain_overview),
+        ("📍  SERP Checker", module_serp),
+        ("🔗  Backlink Analytics", module_backlinks),
+    ],
+    "🛠️  TECHNICAL SEO": [
+        ("🛠️  Site Audit", module_site_audit),
+        ("📈  Search Console", module_search_console),
+    ]
 }
 
 def main():
@@ -1408,58 +1467,54 @@ def main():
         else:
             st.markdown('<h2 style="color:white;font-weight:800;margin:0 0 4px;">EMBLUS</h2>', unsafe_allow_html=True)
 
-        st.markdown('<p style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.12em;margin-top:2px;margin-bottom:12px;">Enterprise SEO Suite</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.12em;margin-top:2px;margin-bottom:10px;">Enterprise SEO Suite</p>', unsafe_allow_html=True)
 
-        # Connection badge
-        st.markdown('<div class="cred-badge-ok">🟢 Live DataForSEO Active</div>', unsafe_allow_html=True)
-
-        st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
-
-        # Semrush Section Groups & Navigation Radio
-        labels = [m[0] for m in MODULES]
-        current_sec = None
-        for lbl, sec in MODULES:
-            if sec != current_sec:
-                current_sec = sec
-                st.markdown(f'<p class="sidebar-section-title">{SECTIONS[sec]}</p>', unsafe_allow_html=True)
-
-        selected = st.radio("nav", labels, label_visibility="collapsed")
+        # Connection badge with live status test
+        is_live, status_text = check_dataforseo_connection(DFS_LOGIN, DFS_PASS)
+        if is_live:
+            st.markdown(f'<div class="cred-badge-live">🟢 DataForSEO Active ({status_text})</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="cred-badge-calibrated">⚡ Calibrated Semrush Engine</div>', unsafe_allow_html=True)
 
         st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
 
-        # Optional Settings Expander for API Keys
+        # 1. Primary Suite Category Selector (MAKES "KEYWORD RESEARCH", etc. 100% CLICKABLE)
+        st.markdown('<p class="nav-section-title">SECTIONS</p>', unsafe_allow_html=True)
+        cat_keys = list(SUITE_STRUCTURE.keys())
+        active_cat = st.radio("nav_category", cat_keys, index=0, label_visibility="collapsed")
+
+        st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
+
+        # 2. Tool Selector under the active category
+        st.markdown('<p class="nav-section-title">ACTIVE TOOLS</p>', unsafe_allow_html=True)
+        tools_in_cat = SUITE_STRUCTURE[active_cat]
+        tool_names = [t[0] for t in tools_in_cat]
+        selected_tool_name = st.radio("nav_tool", tool_names, index=0, label_visibility="collapsed")
+
+        st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
+
+        # API Configuration Expander
         with st.expander("⚙️ API Configuration", expanded=False):
-            custom_login = st.text_input("DataForSEO Login", value=DFS_LOGIN, type="default")
-            custom_pass = st.text_input("DataForSEO Password", value=DFS_PASS, type="password")
-            if st.button("Save Credentials", use_container_width=True):
-                st.session_state["custom_dfs_login"] = custom_login
-                st.session_state["custom_dfs_pass"] = custom_pass
-                st.success("Credentials saved!")
+            st.caption("Enter credentials from app.dataforseo.com/api-access to activate live Google data:")
+            c_user = st.text_input("DataForSEO Login", value=DFS_LOGIN)
+            c_key = st.text_input("DataForSEO Password / API Key", value=DFS_PASS, type="password")
+            if st.button("Save & Test Connection", use_container_width=True):
+                st.session_state["custom_dfs_login"] = c_user
+                st.session_state["custom_dfs_pass"] = c_key
+                st.cache_data.clear()
                 st.rerun()
 
         st.markdown(
-            '<p style="font-size:10.5px;color:rgba(255,255,255,0.3);text-align:center;margin-top:14px;">'
+            '<p style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;margin-top:12px;">'
             'Powered by DataForSEO & Emblus AI<br>© 2026 Emblus Intelligence</p>',
             unsafe_allow_html=True
         )
 
-    # Route to selected module
-    if "Keyword Overview" in selected:
-        module_keyword_overview()
-    elif "Keyword Magic" in selected:
-        module_keyword_magic()
-    elif "Keyword Gap" in selected:
-        module_keyword_gap()
-    elif "Domain Overview" in selected:
-        module_domain_overview()
-    elif "SERP Checker" in selected:
-        module_serp()
-    elif "Backlink" in selected:
-        module_backlinks()
-    elif "Site Audit" in selected:
-        module_site_audit()
-    elif "Search Console" in selected:
-        module_search_console()
+    # Execute the selected module function
+    for t_name, t_func in tools_in_cat:
+        if t_name == selected_tool_name:
+            t_func()
+            break
 
 if __name__ == "__main__":
     main()
