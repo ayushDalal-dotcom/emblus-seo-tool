@@ -6,3 +6,4 @@ pytrends>=4.9.2
 google-auth-oauthlib>=1.2.0
 google-api-python-client>=2.100.0
 truststore>=0.10.0
+python-dotenv>=1.0.0
