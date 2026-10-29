@@ -64,8 +64,8 @@ def get_credentials():
 
     # 4. Built-in pre-configured account
     if not login or not password or login == "your_api_login":
-        login = "krunal.emblus@gmail.com"
-        password = "WHxZdiP!!z25dhB"
+        login = "tk16vskap2iruegpv2s"
+        password = "2f122d2ce7e47c2c"
 
     return login.strip(), password.strip()
 
