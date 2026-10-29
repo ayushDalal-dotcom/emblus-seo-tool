@@ -1555,13 +1555,86 @@ def module_search_console():
         st.markdown('</div>', unsafe_allow_html=True)
 
     with tab_report:
+        CLIENT_PROPERTIES = {
+            "sc-domain:emblus.com (Domain property)": {
+                "clicks": 48250, "imp": 1240000, "ctr": 3.89, "pos": 13.4,
+                "domain": "emblus.com",
+                "top_q": [
+                    {"Query": "emblus seo tool", "Clicks": 8420, "Impressions": 24100, "CTR %": 34.9, "Avg Position": 1.2},
+                    {"Query": "best enterprise seo platform", "Clicks": 6120, "Impressions": 98400, "CTR %": 6.2, "Avg Position": 3.4},
+                    {"Query": "digital marketing analytics suite", "Clicks": 4850, "Impressions": 112000, "CTR %": 4.3, "Avg Position": 4.8},
+                    {"Query": "semrush alternative free", "Clicks": 4120, "Impressions": 84500, "CTR %": 4.9, "Avg Position": 5.1},
+                ]
+            },
+            "sc-domain:jpadweb.com (Domain property)": {
+                "clicks": 29400, "imp": 680000, "ctr": 4.32, "pos": 11.2,
+                "domain": "jpadweb.com",
+                "top_q": [
+                    {"Query": "jpad web design services", "Clicks": 5200, "Impressions": 18200, "CTR %": 28.5, "Avg Position": 1.4},
+                    {"Query": "wordpress custom theme developer", "Clicks": 3840, "Impressions": 72000, "CTR %": 5.3, "Avg Position": 3.8},
+                    {"Query": "ecommerce web development agency", "Clicks": 3120, "Impressions": 64000, "CTR %": 4.9, "Avg Position": 4.5},
+                ]
+            },
+            "sc-domain:rfpplanet.com (Domain property)": {
+                "clicks": 34800, "imp": 890000, "ctr": 3.91, "pos": 12.8,
+                "domain": "rfpplanet.com",
+                "top_q": [
+                    {"Query": "government rfp database", "Clicks": 6400, "Impressions": 82000, "CTR %": 7.8, "Avg Position": 2.1},
+                    {"Query": "active tenders and bids", "Clicks": 4900, "Impressions": 94000, "CTR %": 5.2, "Avg Position": 3.4},
+                    {"Query": "procurement rfp search engine", "Clicks": 3800, "Impressions": 76000, "CTR %": 5.0, "Avg Position": 4.2},
+                ]
+            },
+            "sc-domain:wpeliteplugins.com (Domain property)": {
+                "clicks": 21500, "imp": 540000, "ctr": 3.98, "pos": 14.1,
+                "domain": "wpeliteplugins.com",
+                "top_q": [
+                    {"Query": "elite wordpress plugins store", "Clicks": 4100, "Impressions": 16000, "CTR %": 25.6, "Avg Position": 1.3},
+                    {"Query": "woocommerce addon plugins", "Clicks": 2900, "Impressions": 58000, "CTR %": 5.0, "Avg Position": 4.2},
+                ]
+            },
+            "https://rocagressurfaces.com/": {
+                "clicks": 18900, "imp": 420000, "ctr": 4.50, "pos": 9.8,
+                "domain": "rocagressurfaces.com",
+                "top_q": [
+                    {"Query": "rocagres porcelain surfaces", "Clicks": 3800, "Impressions": 14200, "CTR %": 26.8, "Avg Position": 1.2},
+                    {"Query": "luxury ceramic tiles for architects", "Clicks": 2600, "Impressions": 48000, "CTR %": 5.4, "Avg Position": 3.1},
+                ]
+            },
+            "https://www.nihalfintech.com/": {
+                "clicks": 16400, "imp": 380000, "ctr": 4.31, "pos": 10.6,
+                "domain": "nihalfintech.com",
+                "top_q": [
+                    {"Query": "nihal fintech solutions", "Clicks": 3200, "Impressions": 11500, "CTR %": 27.8, "Avg Position": 1.3},
+                    {"Query": "digital banking software api", "Clicks": 2400, "Impressions": 45000, "CTR %": 5.3, "Avg Position": 3.5},
+                ]
+            },
+            "https://www.saadahospital.com/": {
+                "clicks": 24600, "imp": 510000, "ctr": 4.82, "pos": 8.4,
+                "domain": "saadahospital.com",
+                "top_q": [
+                    {"Query": "saada multispeciality hospital", "Clicks": 6100, "Impressions": 19800, "CTR %": 30.8, "Avg Position": 1.1},
+                    {"Query": "emergency cardiology care near me", "Clicks": 3400, "Impressions": 52000, "CTR %": 6.5, "Avg Position": 2.4},
+                ]
+            },
+            "https://finpc.com/": {
+                "clicks": 12800, "imp": 310000, "ctr": 4.13, "pos": 13.9,
+                "domain": "finpc.com",
+                "top_q": [
+                    {"Query": "finpc financial planning software", "Clicks": 2800, "Impressions": 12000, "CTR %": 23.3, "Avg Position": 1.4},
+                ]
+            },
+            "https://netpumps.com/": {
+                "clicks": 14200, "imp": 340000, "ctr": 4.17, "pos": 12.1,
+                "domain": "netpumps.com",
+                "top_q": [
+                    {"Query": "industrial net pumps catalog", "Clicks": 3100, "Impressions": 13400, "CTR %": 23.1, "Avg Position": 1.5},
+                ]
+            },
+        }
+
         c1, c2, c3 = st.columns([3, 1.8, 1])
         with c1:
-            prop = st.selectbox("Select Search Console Property", [
-                "sc-domain:emblus.com (Primary Property)",
-                "https://emblus.com/ (URL-Prefix)",
-                "https://app.emblus.com/ (Subdomain)",
-            ])
+            prop = st.selectbox("Select Search Console Property", list(CLIENT_PROPERTIES.keys()))
         with c2:
             date_range = st.selectbox("Date Range", [
                 "Last 28 Days",
@@ -1575,31 +1648,28 @@ def module_search_console():
 
         spacer(10)
 
+        cur_data = CLIENT_PROPERTIES.get(prop, CLIENT_PROPERTIES["sc-domain:emblus.com (Domain property)"])
+        dom_slug = cur_data["domain"]
+
         # Semrush-Style Search Console KPI Metrics
         cols = st.columns(4)
-        metric_card(cols[0], "🖱️", "Total Clicks", "48,250", sub="↑ 14.2% vs previous period")
-        metric_card(cols[1], "👁️", "Total Impressions", "1.24M", sub="↑ 8.6% organic search reach")
-        metric_card(cols[2], "🎯", "Average CTR", "3.89%", sub="Top 10 SERP benchmark")
-        metric_card(cols[3], "📍", "Average Position", "13.4", sub="Across all ranked queries")
+        metric_card(cols[0], "🖱️", "Total Clicks", fmt(cur_data["clicks"]), sub="↑ 14.2% vs previous period")
+        metric_card(cols[1], "👁️", "Total Impressions", fmt(cur_data["imp"]), sub="↑ 8.6% organic search reach")
+        metric_card(cols[2], "🎯", "Average CTR", f"{cur_data['ctr']:.2f}%", sub="Top 10 SERP benchmark")
+        metric_card(cols[3], "📍", "Average Position", f"{cur_data['pos']:.1f}", sub="Across all ranked queries")
 
         spacer(14)
 
         # Clicks & Impressions Time Series Trajectory
         st.markdown('<div class="content-box">', unsafe_allow_html=True)
-        st.markdown('<div style="font-weight:700;font-size:15px;color:#052F99;margin-bottom:12px;">📈 Daily Organic Clicks & Impressions Trajectory (Search Console)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:700;font-size:15px;color:#052F99;margin-bottom:12px;">📈 Daily Organic Clicks Trajectory: {prop}</div>', unsafe_allow_html=True)
         
-        # Realistic 28-day daily performance curve
         today = date.today()
         dates = [today - timedelta(days=i) for i in range(28, 0, -1)]
-        daily_clicks = [int(1450 + (i * 22) + ((i % 5) * 110) - ((i % 3) * 60)) for i in range(28)]
-        daily_impressions = [int(c * 25.5 + ((i % 4) * 500)) for i, c in enumerate(daily_clicks)]
+        base_click = cur_data["clicks"] / 28.0
+        daily_clicks = [int(base_click * (0.8 + ((i % 6) * 0.08) - ((i % 4) * 0.04))) for i in range(28)]
         
-        df_time = pd.DataFrame({
-            "Date": dates,
-            "Clicks": daily_clicks,
-            "Impressions": daily_impressions,
-        }).set_index("Date")
-
+        df_time = pd.DataFrame({"Date": dates, "Clicks": daily_clicks}).set_index("Date")
         st.line_chart(df_time[["Clicks"]], use_container_width=True, height=220)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1610,18 +1680,7 @@ def module_search_console():
 
         with t_queries:
             st.markdown('<div class="content-box">', unsafe_allow_html=True)
-            queries_data = [
-                {"Query": "emblus seo tool", "Clicks": 8420, "Impressions": 24100, "CTR %": 34.9, "Avg Position": 1.2},
-                {"Query": "best enterprise seo platform", "Clicks": 6120, "Impressions": 98400, "CTR %": 6.2, "Avg Position": 3.4},
-                {"Query": "digital marketing analytics suite", "Clicks": 4850, "Impressions": 112000, "CTR %": 4.3, "Avg Position": 4.8},
-                {"Query": "semrush alternative free", "Clicks": 4120, "Impressions": 84500, "CTR %": 4.9, "Avg Position": 5.1},
-                {"Query": "keyword magic tool online", "Clicks": 3890, "Impressions": 76200, "CTR %": 5.1, "Avg Position": 3.9},
-                {"Query": "technical site audit crawler", "Clicks": 3210, "Impressions": 62400, "CTR %": 5.1, "Avg Position": 4.2},
-                {"Query": "backlink analytics checker", "Clicks": 2980, "Impressions": 58900, "CTR %": 5.1, "Avg Position": 6.3},
-                {"Query": "google search console integration tool", "Clicks": 2450, "Impressions": 49200, "CTR %": 5.0, "Avg Position": 4.5},
-                {"Query": "competitor keyword gap analysis", "Clicks": 1940, "Impressions": 41300, "CTR %": 4.7, "Avg Position": 7.1},
-                {"Query": "serp feature tracking dashboard", "Clicks": 1620, "Impressions": 35800, "CTR %": 4.5, "Avg Position": 8.0},
-            ]
+            queries_data = cur_data["top_q"]
             df_q = pd.DataFrame(queries_data)
             st.dataframe(df_q, use_container_width=True, hide_index=True, column_config={
                 "Clicks": st.column_config.NumberColumn(format="%d"),
@@ -1632,7 +1691,7 @@ def module_search_console():
             st.download_button(
                 "📥  Download Queries CSV",
                 data=df_q.to_csv(index=False).encode("utf-8"),
-                file_name="gsc_top_queries.csv",
+                file_name=f"{dom_slug}_gsc_top_queries.csv",
                 mime="text/csv",
             )
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1640,12 +1699,10 @@ def module_search_console():
         with t_pages:
             st.markdown('<div class="content-box">', unsafe_allow_html=True)
             pages_data = [
-                {"Landing Page": "https://emblus.com/", "Clicks": 18240, "Impressions": 384000, "CTR %": 4.75, "Avg Position": 2.8},
-                {"Landing Page": "https://emblus.com/keyword-magic-tool", "Clicks": 9420, "Impressions": 210000, "CTR %": 4.48, "Avg Position": 3.9},
-                {"Landing Page": "https://emblus.com/technical-audit", "Clicks": 7180, "Impressions": 165000, "CTR %": 4.35, "Avg Position": 4.1},
-                {"Landing Page": "https://emblus.com/domain-overview", "Clicks": 5840, "Impressions": 142000, "CTR %": 4.11, "Avg Position": 5.2},
-                {"Landing Page": "https://emblus.com/backlink-checker", "Clicks": 4320, "Impressions": 118000, "CTR %": 3.66, "Avg Position": 6.4},
-                {"Landing Page": "https://emblus.com/blog/seo-strategy-2026", "Clicks": 3250, "Impressions": 94000, "CTR %": 3.45, "Avg Position": 7.8},
+                {"Landing Page": f"https://{dom_slug}/", "Clicks": int(cur_data['clicks'] * 0.45), "Impressions": int(cur_data['imp'] * 0.38), "CTR %": round(cur_data['ctr'] * 1.15, 2), "Avg Position": round(cur_data['pos'] * 0.4, 1)},
+                {"Landing Page": f"https://{dom_slug}/services", "Clicks": int(cur_data['clicks'] * 0.22), "Impressions": int(cur_data['imp'] * 0.25), "CTR %": round(cur_data['ctr'], 2), "Avg Position": round(cur_data['pos'] * 0.7, 1)},
+                {"Landing Page": f"https://{dom_slug}/about", "Clicks": int(cur_data['clicks'] * 0.14), "Impressions": int(cur_data['imp'] * 0.15), "CTR %": round(cur_data['ctr'] * 0.9, 2), "Avg Position": round(cur_data['pos'] * 0.85, 1)},
+                {"Landing Page": f"https://{dom_slug}/contact", "Clicks": int(cur_data['clicks'] * 0.08), "Impressions": int(cur_data['imp'] * 0.09), "CTR %": round(cur_data['ctr'] * 0.8, 2), "Avg Position": round(cur_data['pos'] * 0.95, 1)},
             ]
             df_p = pd.DataFrame(pages_data)
             st.dataframe(df_p, use_container_width=True, hide_index=True, column_config={
@@ -1657,7 +1714,7 @@ def module_search_console():
             st.download_button(
                 "📥  Download Pages CSV",
                 data=df_p.to_csv(index=False).encode("utf-8"),
-                file_name="gsc_top_pages.csv",
+                file_name=f"{dom_slug}_gsc_top_pages.csv",
                 mime="text/csv",
             )
             st.markdown('</div>', unsafe_allow_html=True)
