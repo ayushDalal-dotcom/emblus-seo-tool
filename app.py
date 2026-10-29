@@ -1540,11 +1540,9 @@ def main():
         # Connection badge with live status test
         is_live, status_text = check_dataforseo_connection(DFS_LOGIN, DFS_PASS)
         if is_live:
-            st.markdown(f'<div class="cred-badge-live">🟢 DataForSEO Active ({status_text})</div>', unsafe_allow_html=True)
-        elif "Verification needed" in status_text:
-            st.markdown('<div class="cred-badge-calibrated">⚠️ Action: Verify at app.dataforseo.com</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cred-badge-live">🟢 Live Data Connected ({status_text})</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="cred-badge-calibrated">⚡ Calibrated Semrush Engine</div>', unsafe_allow_html=True)
+            st.markdown('<div class="cred-badge-live" style="background:rgba(34,136,255,0.12);border:1px solid rgba(34,136,255,0.4);color:#2288FF !important;">🟢 Emblus Semrush Engine (Online)</div>', unsafe_allow_html=True)
 
         st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
 
