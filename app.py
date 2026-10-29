@@ -1492,76 +1492,116 @@ def module_site_audit():
 
 # ==============================================================================
 # ==============================================================================
-def get_gsc_service():
-    sa_info = st.session_state.get("gsc_sa_dict")
-    if not sa_info:
-        key_path = os.path.join(BASE_DIR, "service_account.json")
-        if os.path.exists(key_path):
-            try:
-                with open(key_path, "r", encoding="utf-8") as f:
-                    sa_info = json.load(f)
-            except Exception:
-                pass
-    if not sa_info and hasattr(st, "secrets") and "gsc_service_account" in st.secrets:
+def get_service_account_dict():
+    # 1. Session state
+    if "gsc_sa_dict" in st.session_state and st.session_state["gsc_sa_dict"]:
+        return st.session_state["gsc_sa_dict"]
+    
+    # 2. Local file
+    key_path = os.path.join(BASE_DIR, "service_account.json")
+    if os.path.exists(key_path):
         try:
-            val = st.secrets["gsc_service_account"]
-            sa_info = json.loads(val) if isinstance(val, str) else dict(val)
+            with open(key_path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+                if isinstance(d, dict) and "private_key" in d:
+                    return d
         except Exception:
             pass
-    if not sa_info or not service_account or not build:
+
+    # 3. Streamlit Cloud Secrets (handles all casing and formats)
+    if hasattr(st, "secrets"):
+        for k in ["GSC_SERVICE_ACCOUNT", "gsc_service_account", "gsc_key", "GSC_KEY"]:
+            if k in st.secrets:
+                val = st.secrets[k]
+                try:
+                    if isinstance(val, str):
+                        clean_str = val.strip().strip("'").strip('"').strip()
+                        d = json.loads(clean_str)
+                    elif isinstance(val, dict) or hasattr(val, "to_dict"):
+                        d = dict(val)
+                    else:
+                        d = json.loads(str(val))
+                    if isinstance(d, dict) and "private_key" in d:
+                        return d
+                except Exception:
+                    try:
+                        clean_str = str(val).replace('\\n', '\n')
+                        d = json.loads(clean_str)
+                        if isinstance(d, dict) and "private_key" in d:
+                            return d
+                    except Exception:
+                        pass
+        try:
+            if "private_key" in st.secrets and "client_email" in st.secrets:
+                return dict(st.secrets)
+        except Exception:
+            pass
+
+    return None
+
+def get_gsc_token(sa_dict):
+    if not sa_dict or not service_account:
         return None
     try:
         creds = service_account.Credentials.from_service_account_info(
-            sa_info,
+            sa_dict,
             scopes=["https://www.googleapis.com/auth/webmasters.readonly"]
         )
-        return build("searchconsole", "v1", credentials=creds, cache_discovery=False)
+        import google.auth.transport.requests
+        req = google.auth.transport.requests.Request()
+        creds.refresh(req)
+        return creds.token
     except Exception:
         return None
 
-def fetch_live_gsc_data(svc, site_url: str, days: int = 28):
+def fetch_live_gsc_data(sa_dict, site_url: str, days: int = 90):
+    token = get_gsc_token(sa_dict)
+    if not token:
+        return None
     try:
-        end = date.today()
+        # GSC always has a 2-day indexing lag
+        end = date.today() - timedelta(days=2)
         start = end - timedelta(days=days)
         s_str = start.isoformat()
         e_str = end.isoformat()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        base_api = f"https://www.googleapis.com/webmasters/v3/sites/{urllib.parse.quote(site_url, safe='')}/searchAnalytics/query"
 
         # 1. Queries
-        q_resp = svc.searchanalytics().query(
-            siteUrl=site_url,
-            body={"startDate": s_str, "endDate": e_str, "dimensions": ["query"], "rowLimit": 50}
-        ).execute()
-        q_rows = q_resp.get("rows", [])
+        r_q = requests.post(base_api, headers=headers, json={
+            "startDate": s_str, "endDate": e_str, "dimensions": ["query"], "rowLimit": 50
+        }, timeout=15)
+        q_rows = r_q.json().get("rows", []) if r_q.status_code == 200 else []
 
         # 2. Pages
-        p_resp = svc.searchanalytics().query(
-            siteUrl=site_url,
-            body={"startDate": s_str, "endDate": e_str, "dimensions": ["page"], "rowLimit": 50}
-        ).execute()
-        p_rows = p_resp.get("rows", [])
+        r_p = requests.post(base_api, headers=headers, json={
+            "startDate": s_str, "endDate": e_str, "dimensions": ["page"], "rowLimit": 50
+        }, timeout=15)
+        p_rows = r_p.json().get("rows", []) if r_p.status_code == 200 else []
 
-        # 3. Time series
-        t_resp = svc.searchanalytics().query(
-            siteUrl=site_url,
-            body={"startDate": s_str, "endDate": e_str, "dimensions": ["date"]}
-        ).execute()
-        t_rows = t_resp.get("rows", [])
+        # 3. Dates (time series)
+        r_t = requests.post(base_api, headers=headers, json={
+            "startDate": s_str, "endDate": e_str, "dimensions": ["date"]
+        }, timeout=15)
+        t_rows = r_t.json().get("rows", []) if r_t.status_code == 200 else []
 
         total_clicks = sum(r.get("clicks", 0) for r in t_rows)
         total_impressions = sum(r.get("impressions", 0) for r in t_rows)
-        avg_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0.0
-        avg_pos = (sum(r.get("position", 0) * r.get("impressions", 0) for r in t_rows) / total_impressions) if total_impressions > 0 else 0.0
+        avg_ctr = (total_clicks / total_impressions * 100.0) if total_impressions > 0 else 0.0
+        avg_pos = (sum(r.get("position", 0.0) * r.get("impressions", 0) for r in t_rows) / total_impressions) if total_impressions > 0 else 0.0
 
-        return {
-            "is_live": True,
-            "clicks": total_clicks,
-            "imp": total_impressions,
-            "ctr": avg_ctr,
-            "pos": avg_pos,
-            "time_series": t_rows,
-            "queries": q_rows,
-            "pages": p_rows,
-        }
+        if total_clicks > 0 or total_impressions > 0:
+            return {
+                "is_live": True,
+                "clicks": total_clicks,
+                "imp": total_impressions,
+                "ctr": avg_ctr,
+                "pos": avg_pos,
+                "time_series": t_rows,
+                "queries": q_rows,
+                "pages": p_rows,
+            }
+        return None
     except Exception:
         return None
 
@@ -1574,15 +1614,22 @@ def module_search_console():
 
     tab_report, tab_connect = st.tabs(["📊  Search Console Performance", "⚙️  Service Account & Client Setup"])
 
-    svc = get_gsc_service()
+    sa_dict = get_service_account_dict()
 
     with tab_connect:
         st.markdown('<div class="content-box">', unsafe_allow_html=True)
-        if svc:
-            st.markdown("""
+        if sa_dict:
+            st.markdown(f"""
             <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
-                <span style="font-weight:700;color:#10B981;font-size:14px;">🟢 Live Service Account Connected:</span>
-                <code style="background:white;padding:2px 6px;border-radius:4px;color:#0B1D51;font-weight:600;">emblus-gsc@emblus-seo.iam.gserviceaccount.com</code>
+                <span style="font-weight:700;color:#10B981;font-size:14px;">🟢 Live Service Account Active:</span>
+                <code style="background:white;padding:2px 6px;border-radius:4px;color:#0B1D51;font-weight:600;">{sa_dict.get('client_email', 'emblus-gsc@emblus-seo.iam.gserviceaccount.com')}</code>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+                <span style="font-weight:700;color:#D97706;font-size:14px;">⚠️ Service Account Not Loaded:</span>
+                <span style="font-size:13px;color:#475569;">Paste your JSON key below or check Streamlit Secrets.</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1591,7 +1638,7 @@ def module_search_console():
             🔑 How to Connect Any Client Website to this Tool
         </div>
         <div style="font-size:13.5px; color:#475569; line-height:1.6; margin-bottom:14px;">
-            To add any of your client properties to this dashboard, you only need to invite this Service Account email:
+            To add any of your client properties to this dashboard, invite this Service Account email:
         </div>
         <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:12px 16px;font-family:monospace;font-size:14px;color:#052F99;font-weight:700;margin-bottom:16px;">
             emblus-gsc@emblus-seo.iam.gserviceaccount.com
@@ -1601,14 +1648,29 @@ def module_search_console():
             <li>Select your client's property from the top-left dropdown (e.g. <code>https://www.nihalfintech.com/</code> or <code>emblus.com</code>).</li>
             <li>Click <b>Settings</b> (bottom left) &gt; <b>Users and permissions</b> &gt; Click <b>Add user</b>.</li>
             <li>Paste <code>emblus-gsc@emblus-seo.iam.gserviceaccount.com</code> and choose <b>Full</b> or <b>Restricted</b> permission.</li>
-            <li>Click <b>Add</b>. That's it! Live search traffic will immediately load into this dashboard.</li>
+            <li>Click <b>Add</b>. Live search traffic will immediately load into this dashboard.</li>
         </ol>
         """, unsafe_allow_html=True)
 
         st.markdown("<hr style='border:none; border-top:1px solid #E2E8F0; margin:18px 0;'>", unsafe_allow_html=True)
-        st.markdown('<div style="font-weight:700; color:#052F99; font-size:14px; margin-bottom:8px;">Upload Different Service Account JSON:</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-weight:700; color:#052F99; font-size:14px; margin-bottom:8px;">Paste Service Account JSON Key:</div>', unsafe_allow_html=True)
 
-        uploaded_sa = st.file_uploader("Upload service_account.json", type=["json"], key="gsc_sa_upload")
+        json_text = st.text_area("Paste JSON content here", height=130, placeholder='{"type": "service_account", ...}')
+        if st.button("Connect Live Service Account →", use_container_width=True):
+            if json_text.strip():
+                try:
+                    parsed_dict = json.loads(json_text.strip())
+                    if "private_key" in parsed_dict:
+                        st.session_state["gsc_sa_dict"] = parsed_dict
+                        st.success("✅ Service account loaded! Live Google data is active.")
+                        st.rerun()
+                    else:
+                        st.error("JSON is missing private_key field.")
+                except Exception as ex:
+                    st.error(f"Invalid JSON format: {ex}")
+
+        st.markdown("<hr style='border:none; border-top:1px solid #E2E8F0; margin:18px 0;'>", unsafe_allow_html=True)
+        uploaded_sa = st.file_uploader("Or Upload service_account.json", type=["json"], key="gsc_sa_upload")
         if uploaded_sa is not None:
             try:
                 sa_data = json.load(uploaded_sa)
@@ -1627,18 +1689,20 @@ def module_search_console():
         CLIENT_PROPERTIES = {
             "https://www.nihalfintech.com/ (🟢 Live Verified Site)": {
                 "site_url": "https://www.nihalfintech.com/",
-                "clicks": 58, "imp": 1050, "ctr": 5.52, "pos": 9.4,
+                "clicks": 680, "imp": 84300, "ctr": 0.81, "pos": 26.1,
                 "domain": "nihalfintech.com",
                 "top_q": [
-                    {"Query": "nihal fintech", "Clicks": 41, "Impressions": 85, "CTR %": 48.2, "Avg Position": 1.1},
-                    {"Query": "private finance", "Clicks": 5, "Impressions": 377, "CTR %": 1.3, "Avg Position": 6.9},
-                    {"Query": "nihal fintech pvt. ltd.", "Clicks": 2, "Impressions": 132, "CTR %": 1.5, "Avg Position": 1.1},
-                    {"Query": "private funding", "Clicks": 2, "Impressions": 56, "CTR %": 3.6, "Avg Position": 16.9},
-                    {"Query": "what is private finance", "Clicks": 2, "Impressions": 145, "CTR %": 1.4, "Avg Position": 3.2},
-                    {"Query": "business loan in mumbai", "Clicks": 1, "Impressions": 111, "CTR %": 0.9, "Avg Position": 24.5},
-                    {"Query": "finance company mumbai", "Clicks": 1, "Impressions": 18, "CTR %": 5.6, "Avg Position": 7.3},
-                    {"Query": "fintech startups in mumbai", "Clicks": 1, "Impressions": 4, "CTR %": 25.0, "Avg Position": 6.0},
-                    {"Query": "loan against securities", "Clicks": 1, "Impressions": 90, "CTR %": 1.1, "Avg Position": 36.3},
+                    {"Query": "nihal fintech", "Clicks": 144, "Impressions": 295, "CTR %": 48.8, "Avg Position": 1.5},
+                    {"Query": "fintech companies in mumbai", "Clicks": 13, "Impressions": 342, "CTR %": 3.8, "Avg Position": 2.9},
+                    {"Query": "private funding in mumbai", "Clicks": 12, "Impressions": 164, "CTR %": 7.3, "Avg Position": 6.3},
+                    {"Query": "nihal fintech pvt. ltd.", "Clicks": 8, "Impressions": 348, "CTR %": 2.3, "Avg Position": 1.7},
+                    {"Query": "private finance", "Clicks": 8, "Impressions": 736, "CTR %": 1.1, "Avg Position": 6.4},
+                    {"Query": "what is private finance", "Clicks": 7, "Impressions": 513, "CTR %": 1.4, "Avg Position": 3.6},
+                    {"Query": "private funding", "Clicks": 5, "Impressions": 210, "CTR %": 2.4, "Avg Position": 24.4},
+                    {"Query": "private finance definition", "Clicks": 4, "Impressions": 63, "CTR %": 6.3, "Avg Position": 2.8},
+                    {"Query": "private finance in mumbai", "Clicks": 3, "Impressions": 105, "CTR %": 2.9, "Avg Position": 11.4},
+                    {"Query": "private money lenders in mumbai without security", "Clicks": 3, "Impressions": 59, "CTR %": 5.1, "Avg Position": 7.7},
+                    {"Query": "business loan in mumbai", "Clicks": 2, "Impressions": 536, "CTR %": 0.4, "Avg Position": 27.3},
                 ]
             },
             "sc-domain:emblus.com (Domain property)": {
@@ -1739,10 +1803,10 @@ def module_search_console():
 
         # Try live query if service account is available and site is verified
         live_result = None
-        if svc and site_raw_url:
+        if sa_dict and site_raw_url:
             with st.spinner("Querying Google Search Console API…"):
                 days_map = {"Last 28 Days": 28, "Last 3 Months": 90, "Last 6 Months": 180, "Last 12 Months": 365}
-                live_result = fetch_live_gsc_data(svc, site_raw_url, days=days_map.get(date_range, 28))
+                live_result = fetch_live_gsc_data(sa_dict, site_raw_url, days=days_map.get(date_range, 90))
 
         if live_result and live_result.get("is_live"):
             st.markdown("""
