@@ -72,21 +72,22 @@ def get_credentials():
 DFS_LOGIN, DFS_PASS = get_credentials()
 
 # Quick test if DataForSEO credentials are valid and authorized
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def check_dataforseo_connection(login, password):
     if not login or not password:
         return False, "Credentials not entered"
     try:
         r = requests.get(
-            "https://api.dataforseo.com/v3/appendix/user_data",
+            "https://api.dataforseo.com/v3/appendix/status",
             auth=(login, password),
-            timeout=4
+            timeout=5
         )
         if r.status_code == 200:
             d = r.json()
             if d.get("status_code") == 20000:
-                money = d.get("tasks", [{}])[0].get("result", [{}])[0].get("money", 0)
-                return True, f"Live (${money:.2f} credits)"
+                return True, "Live Connected"
+            elif d.get("status_code") == 40104:
+                return False, "Verification needed at app.dataforseo.com"
             elif d.get("status_code") == 40100:
                 return False, "401 Unauthorized"
             return False, d.get("status_message", "Error")
@@ -1540,6 +1541,8 @@ def main():
         is_live, status_text = check_dataforseo_connection(DFS_LOGIN, DFS_PASS)
         if is_live:
             st.markdown(f'<div class="cred-badge-live">🟢 DataForSEO Active ({status_text})</div>', unsafe_allow_html=True)
+        elif "Verification needed" in status_text:
+            st.markdown('<div class="cred-badge-calibrated">⚠️ Action: Verify at app.dataforseo.com</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="cred-badge-calibrated">⚡ Calibrated Semrush Engine</div>', unsafe_allow_html=True)
 
